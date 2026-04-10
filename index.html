@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+	<title>PunchFlow</title>
+	<link rel="preconnect" href="https://fonts.googleapis.com">
+	<link
+		href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@300;400;700;900&family=Barlow:wght@300;400;500&display=swap"
+		rel="stylesheet">
+	<link rel="stylesheet" href="./src/style.css">
+</head>
+
+<body>
+
+	<header>
+		<div class="logo">Punch<span>Flow</span></div>
+		<button class="legend-btn" id="legendBtn">Punch Key</button>
+	</header>
+
+	<main class="stage">
+		<div class="combo-label">
+			<span class="status-dot" id="dot"></span>
+			<span class="status-text" id="statusText">Ready</span>
+		</div>
+
+		<div class="combo-display" id="comboDisplay">— — —</div>
+
+		<div class="progress-wrap" id="progressWrap">
+			<svg viewBox="0 0 56 56" width="56" height="56">
+				<circle class="progress-track" cx="28" cy="28" r="24" />
+				<circle class="progress-ring" cx="28" cy="28" r="24" id="progressRing" stroke-dasharray="150.8"
+					stroke-dashoffset="150.8" />
+			</svg>
+			<div class="progress-count" id="progressCount">—</div>
+		</div>
+	</main>
+
+	<div class="controls">
+		<div class="sliders">
+			<div class="field">
+				<label>Punches</label>
+				<div class="field-row">
+					<input type="range" id="lengthSlider" min="2" max="10" value="4" step="1">
+					<span class="field-val" id="lengthVal">4</span>
+				</div>
+			</div>
+			<div class="field">
+				<label>Interval (s)</label>
+				<div class="field-row">
+					<input type="range" id="intervalSlider" min="2" max="15" value="5" step="1">
+					<span class="field-val" id="intervalVal">5</span>
+				</div>
+			</div>
+		</div>
+
+		<div class="btn-row">
+			<button class="btn btn-start" id="startBtn">Start</button>
+			<button class="btn btn-skip" id="skipBtn">Next</button>
+		</div>
+	</div>
+
+	<!-- Legend Modal -->
+	<div class="modal-backdrop" id="modalBackdrop">
+		<div class="modal">
+			<div class="modal-handle"></div>
+			<div class="modal-title">Punch Numbers</div>
+			<div class="legend-grid">
+				<div class="legend-item"><span class="legend-num">1</span><span class="legend-name">Jab</span></div>
+				<div class="legend-item"><span class="legend-num">2</span><span class="legend-name">Cross</span></div>
+				<div class="legend-item"><span class="legend-num">3</span><span class="legend-name">Lead Hook</span>
+				</div>
+				<div class="legend-item"><span class="legend-num">4</span><span class="legend-name">Rear Hook</span>
+				</div>
+				<div class="legend-item"><span class="legend-num">5</span><span class="legend-name">Lead Uppercut</span>
+				</div>
+				<div class="legend-item"><span class="legend-num">6</span><span class="legend-name">Rear Uppercut</span>
+				</div>
+				<div class="legend-item"><span class="legend-num">7</span><span class="legend-name">Lead Body
+						Hook</span></div>
+				<div class="legend-item"><span class="legend-num">8</span><span class="legend-name">Rear Body
+						Hook</span></div>
+			</div>
+			<button class="modal-close" id="modalClose">Close</button>
+		</div>
+	</div>
+
+	<script src="./src/app.js"></script>
+</body>
+
+</html>
