@@ -53,7 +53,14 @@ header {
 	color: var(--accent);
 }
 
-.legend-btn {
+.header-actions {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+}
+
+.legend-btn,
+.mute-btn {
 	background: none;
 	border: 1px solid var(--border);
 	color: var(--text-muted);
@@ -64,11 +71,22 @@ header {
 	border-radius: 4px;
 	cursor: pointer;
 	letter-spacing: 0.05em;
-	transition: border-color 0.15s, color 0.15s;
+	transition: border-color 0.15s, color 0.15s, background 0.15s;
 }
-.legend-btn:hover {
+
+.legend-btn:hover,
+.mute-btn:hover {
 	border-color: var(--text-muted);
 	color: var(--text);
+}
+
+.mute-btn.muted {
+	border-color: var(--accent-dim);
+	color: var(--accent);
+}
+
+.mute-btn.muted:hover {
+	border-color: var(--accent);
 }
 
 /* ── COMBO DISPLAY ── */
@@ -114,6 +132,22 @@ header {
 .combo-display .separator {
 	color: var(--accent);
 	font-weight: 300;
+}
+
+/* ── PUNCH HIGHLIGHT ── */
+.combo-display span:not(.separator) {
+	display: inline-block;
+	color: var(--text-dim);
+	transition: color 0.06s ease, transform 0.06s ease, text-shadow 0.06s ease;
+	will-change: color, transform;
+}
+
+.combo-display span.punch-active {
+	color: var(--text);
+	transform: scale(1.08);
+	text-shadow:
+		0 0 28px rgba(230, 48, 34, 0.55),
+		0 0 8px rgba(230, 48, 34, 0.3);
 }
 
 /* progress ring */
