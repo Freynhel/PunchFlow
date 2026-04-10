@@ -19,13 +19,14 @@ const muteBtn = document.getElementById('muteBtn');
 
 let running = false;
 let timerId = null;
-let rafId = null;
 let beatId = null;
+let rafId = null;
 let startTime = null;
 let intervalMs = 5000;
 let wakeLock = null;
 let currentCombo = [];
 let beatIndex = 0;
+let tickGen = 0;
 
 /* ── Audio ── */
 let audioCtx = null;
@@ -55,14 +56,8 @@ function playClick(accent = false) {
 /* ── Mute ── */
 const MUTE_KEY = 'punchflow_mute';
 
-function isMuted() {
-	return localStorage.getItem(MUTE_KEY) === '1';
-}
-
-function setMuted(val) {
-	localStorage.setItem(MUTE_KEY, val ? '1' : '0');
-	renderMuteBtn();
-}
+function isMuted() { return localStorage.getItem(MUTE_KEY) === '1'; }
+function setMuted(val) { localStorage.setItem(MUTE_KEY, val ? '1' : '0'); renderMuteBtn(); }
 
 function renderMuteBtn() {
 	const muted = isMuted();
@@ -72,10 +67,7 @@ function renderMuteBtn() {
 }
 
 muteBtn.addEventListener('click', () => {
-	if (!isMuted()) {
-		/* resume ctx so next unmute works on mobile */
-		try { getAudioCtx(); } catch (_) { }
-	}
+	try { getAudioCtx().resume(); } catch (_) { }
 	setMuted(!isMuted());
 });
 
@@ -102,81 +94,94 @@ function generateCombo(len) {
 	return punches;
 }
 
-/* ── Render combo with per-punch spans ── */
+/* ── Render ── */
 function renderComboSpans(combo, activeIdx) {
 	comboDisplay.innerHTML = combo.map((n, i) => {
 		const cls = i === activeIdx ? ' class="punch-active"' : '';
-		const sep = i < combo.length - 1
-			? '<span class="separator">–</span>'
-			: '';
+		const sep = i < combo.length - 1 ? '<span class="separator">–</span>' : '';
 		return `<span${cls}>${n}</span>${sep}`;
 	}).join('');
 }
 
-function fadeToCombo(combo) {
-	comboDisplay.classList.add('fade');
-	setTimeout(() => {
-		beatIndex = 0;
-		currentCombo = combo;
-		renderComboSpans(combo, beatIndex);
-		comboDisplay.classList.remove('fade');
-	}, 120);
-}
-
-/* ── Metronome beat ── */
-function startBeat() {
-	clearInterval(beatId);
-	const len = currentCombo.length;
-	if (len === 0) return;
-	const beatMs = intervalMs / len;
-
-	beatId = setInterval(() => {
-		if (!running) return;
-		beatIndex = (beatIndex + 1) % len;
-		const isFirst = beatIndex === 0;
-		renderComboSpans(currentCombo, beatIndex);
-		playClick(isFirst);
-	}, beatMs);
-}
-
-/* ── Progress ring animation ── */
+/* ── Progress ring (anchored to startTime) ── */
 function animateRing() {
 	cancelAnimationFrame(rafId);
 	function frame() {
 		const elapsed = performance.now() - startTime;
 		const progress = Math.min(elapsed / intervalMs, 1);
-		const offset = CIRCUMFERENCE * (1 - progress);
-		progressRing.style.strokeDashoffset = offset;
-		const remaining = Math.ceil((intervalMs - elapsed) / 1000);
-		progressCount.textContent = remaining + 's';
+		progressRing.style.strokeDashoffset = CIRCUMFERENCE * (1 - progress);
+		progressCount.textContent = Math.ceil((intervalMs - elapsed) / 1000) + 's';
 		if (progress < 1) rafId = requestAnimationFrame(frame);
 	}
 	rafId = requestAnimationFrame(frame);
 }
 
-function tick(combo) {
-	startTime = performance.now();
-	intervalMs = getInterval() * 1000;
-	currentCombo = combo;
-	beatIndex = 0;
-	comboDisplay.classList.add('fade');
-	setTimeout(() => {
-		renderComboSpans(combo, beatIndex);
-		comboDisplay.classList.remove('fade');
-		playClick(true);
-		startBeat();
-	}, 120);
-	progressCount.textContent = getInterval() + 's';
-	animateRing();
+/* ── Drift-correcting beat scheduler ──────────────────────────────────────
+ *
+ *  Each beat fires at an absolute time:
+ *    fireAt = startTime + beatNum * beatMs
+ *
+ *  Instead of a fixed setInterval (which accumulates jitter), each callback
+ *  schedules the NEXT beat based on how far we already are past startTime.
+ *  This keeps beats and the ring in phase indefinitely.
+ */
+function scheduleBeat(gen, combo, beatNum) {
+	const beatMs = intervalMs / combo.length;
+	const fireAt = startTime + beatNum * beatMs;
+	const delay = Math.max(0, fireAt - performance.now());
+
+	beatId = setTimeout(() => {
+		if (!running || gen !== tickGen) return;
+		const idx = beatNum % combo.length;
+		beatIndex = idx;
+		renderComboSpans(combo, idx);
+		playClick(idx === 0);
+		scheduleBeat(gen, combo, beatNum + 1);
+	}, delay);
 }
 
-function scheduleNext() {
-	clearTimeout(timerId);
+/* ── Sequence scheduler (anchored to the same startTime) ── */
+function scheduleNext(gen) {
+	const fireAt = startTime + intervalMs;
+	const delay = Math.max(0, fireAt - performance.now());
+
 	timerId = setTimeout(() => {
-		if (!running) return;
+		if (!running || gen !== tickGen) return;
 		tick(generateCombo(getLength()));
-		scheduleNext();
-	}, intervalMs);
+	}, delay);
+}
+
+/* ── tick ──────────────────────────────────────────────────────────────────
+ *
+ *  Fade OUT → capture startTime → render → kick off ring + beats + sequence.
+ *  All three share one startTime so they are perfectly phase-locked from the
+ *  moment the combo becomes visible.
+ */
+function tick(combo) {
+	intervalMs = getInterval() * 1000;
+	const gen = ++tickGen;
+
+	clearTimeout(timerId);
+	clearTimeout(beatId);
+	cancelAnimationFrame(rafId);
+
+	comboDisplay.classList.add('fade');
+
+	setTimeout(() => {
+		if (!running || gen !== tickGen) return;
+
+		startTime = performance.now();   // single anchor for everything
+		currentCombo = combo;
+		beatIndex = 0;
+
+		renderComboSpans(combo, 0);
+		comboDisplay.classList.remove('fade');
+
+		animateRing();
+		playClick(true);
+		scheduleBeat(gen, combo, 1);        // beat 0 already shown; schedule 1 onward
+		scheduleNext(gen);
+	}, 120);
 }
 
 /* ── Control state ── */
@@ -208,17 +213,15 @@ function startTraining() {
 	statusText.textContent = 'Training';
 	syncControlState();
 	acquireWakeLock();
-	intervalMs = getInterval() * 1000;
-	/* resume AudioContext after user gesture */
 	try { getAudioCtx().resume(); } catch (_) { }
 	tick(generateCombo(getLength()));
-	scheduleNext();
 }
 
 function stopTraining() {
 	running = false;
+	tickGen++;
 	clearTimeout(timerId);
-	clearInterval(beatId);
+	clearTimeout(beatId);
 	cancelAnimationFrame(rafId);
 	currentCombo = [];
 	beatIndex = 0;
@@ -236,11 +239,7 @@ stopBtn.addEventListener('click', stopTraining);
 
 skipBtn.addEventListener('click', () => {
 	if (!running) return;
-	clearTimeout(timerId);
-	clearInterval(beatId);
-	cancelAnimationFrame(rafId);
 	tick(generateCombo(getLength()));
-	scheduleNext();
 });
 
 document.addEventListener('keydown', e => {
