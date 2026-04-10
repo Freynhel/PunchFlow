@@ -7,6 +7,7 @@ const progressCount = document.getElementById('progressCount');
 const dot = document.getElementById('dot');
 const statusText = document.getElementById('statusText');
 const startBtn = document.getElementById('startBtn');
+const stopBtn = document.getElementById('stopBtn');
 const skipBtn = document.getElementById('skipBtn');
 const lengthSlider = document.getElementById('lengthSlider');
 const intervalSlider = document.getElementById('intervalSlider');
@@ -21,6 +22,7 @@ let timerId = null;
 let rafId = null;
 let startTime = null;
 let intervalMs = 5000;
+let wakeLock = null;
 
 function getLength() { return parseInt(lengthSlider.value); }
 function getInterval() { return parseInt(intervalSlider.value); }
@@ -90,13 +92,33 @@ function scheduleNext() {
 	}, intervalMs);
 }
 
+function syncControlState() {
+	startBtn.disabled = running;
+	stopBtn.disabled = !running;
+	skipBtn.disabled = !running;
+}
+
+async function acquireWakeLock() {
+	if (!('wakeLock' in navigator) || wakeLock) return;
+	try {
+		wakeLock = await navigator.wakeLock.request('screen');
+		wakeLock.addEventListener('release', () => { wakeLock = null; });
+	} catch (_) { }
+}
+
+async function releaseWakeLock() {
+	if (!wakeLock) return;
+	try { await wakeLock.release(); } catch (_) { }
+	wakeLock = null;
+}
+
 function startTraining() {
 	if (running) return;
 	running = true;
 	dot.classList.add('active');
 	statusText.textContent = 'Training';
-	startBtn.textContent = 'Running…';
-	startBtn.disabled = true;
+	syncControlState();
+	acquireWakeLock();
 	intervalMs = getInterval() * 1000;
 	tick(generateCombo(getLength()));
 	scheduleNext();
@@ -108,17 +130,15 @@ function stopTraining() {
 	cancelAnimationFrame(rafId);
 	dot.classList.remove('active');
 	statusText.textContent = 'Stopped';
-	startBtn.textContent = 'Start';
-	startBtn.disabled = false;
+	syncControlState();
+	releaseWakeLock();
 	progressRing.style.strokeDashoffset = CIRCUMFERENCE;
 	progressCount.textContent = '—';
 	comboDisplay.innerHTML = '— — —';
 }
 
-startBtn.addEventListener('click', () => {
-	if (!running) startTraining();
-	else stopTraining();
-});
+startBtn.addEventListener('click', startTraining);
+stopBtn.addEventListener('click', stopTraining);
 
 skipBtn.addEventListener('click', () => {
 	if (!running) return;
@@ -126,10 +146,6 @@ skipBtn.addEventListener('click', () => {
 	cancelAnimationFrame(rafId);
 	tick(generateCombo(getLength()));
 	scheduleNext();
-});
-
-startBtn.addEventListener('click', () => {
-	if (startBtn.textContent === 'Start') return;
 });
 
 document.addEventListener('keydown', e => {
@@ -141,21 +157,10 @@ legendBtn.addEventListener('click', () => modalBackdrop.classList.add('open'));
 modalClose.addEventListener('click', () => modalBackdrop.classList.remove('open'));
 modalBackdrop.addEventListener('click', e => { if (e.target === modalBackdrop) modalBackdrop.classList.remove('open'); });
 
-startBtn.addEventListener('click', function () {
-	if (!running && startBtn.textContent !== 'Running…') startTraining();
-	else if (running) stopTraining();
+document.addEventListener('visibilitychange', () => {
+	if (document.visibilityState === 'visible' && running) {
+		acquireWakeLock();
+	}
 });
 
-startBtn.removeEventListener('click', startTraining);
-startBtn.onclick = () => running ? stopTraining() : startTraining();
-
-if ('wakeLock' in navigator) {
-	let wakeLock = null;
-	startBtn.addEventListener('click', async () => {
-		if (running) {
-			try { wakeLock = await navigator.wakeLock.request('screen'); } catch (_) { }
-		} else {
-			if (wakeLock) { wakeLock.release(); wakeLock = null; }
-		}
-	});
-}
+syncControlState();
